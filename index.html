@@ -77,7 +77,7 @@
   /* ===== reader ===== */
   .progress{height:3px;background:var(--line);flex:0 0 auto}
   .progress i{display:block;height:100%;width:0;background:var(--green);transition:width .3s}
-  .mushaf{padding:14px 16px 235px;text-align:justify;text-align-last:right;overflow-x:clip}
+  #mushaf{padding:14px 18px 235px;text-align:justify;text-align-last:right;overflow-x:clip}
   .bismillah{
     font-family:var(--font-q);font-size:calc(var(--qsize) * .92);color:var(--gold-soft);
     text-align:center;margin:6px 0 18px;line-height:1.9
@@ -91,7 +91,11 @@
   .ayah.done .word{color:var(--green)}
   .word{cursor:pointer;transition:color .12s,opacity .12s}
   .word:active{color:var(--gold)}
-  .ayah.active .word.now{color:var(--gold);font-weight:400}
+  .word.now{
+    color:var(--gold-soft)!important;
+    background:color-mix(in srgb,var(--gold) 22%,transparent);
+    border-radius:5px
+  }
   .word.hid{
     color:transparent;background:color-mix(in srgb,var(--card2) 85%,transparent);
     border-radius:7px;display:inline-block;height:1.02em;line-height:1.02;overflow:hidden;
@@ -212,6 +216,18 @@
   "use strict";
   const QURAN = JSON.parse(document.getElementById('quran-data').textContent);
   const AR_DIGITS = '٠١٢٣٤٥٦٧٨٩';
+  const MARK_RE = /^[\u06D6-\u06ED\u06DD\u06DE\u06E9\u0670\u06E7\u08F0-\u08F2\u0653-\u0655\u0640\u200c\u200d\u064B-\u0652]+$/;
+  function splitWords(text){
+    const out = []; let pend = '';
+    for (const t of text.split(/\s+/)){
+      if (!t) continue;
+      if (MARK_RE.test(t)){
+        if (out.length) out[out.length-1] += t; else pend += t;
+      } else { out.push(pend + t); pend = ''; }
+    }
+    if (pend){ if (out.length) out[out.length-1] += pend; else out.push(pend); }
+    return out;
+  }
   const ar = n => String(n).replace(/[0-9]/g, d => AR_DIGITS[+d]);
 
   /* ---------- storage ---------- */
@@ -220,7 +236,7 @@
     set(k, v){ try{ localStorage.setItem('q.'+k, JSON.stringify(v)); }catch(e){} }
   };
   const SET = Object.assign({
-    theme:'dark', fontSize:30, repeat:1, reciter:0
+    theme:'dark', fontSize:30, repeat:1, reciter:0, wordSync:true
   }, LS.get('settings', {}));
   const saveSet = () => LS.set('settings', SET);
   const PROG = LS.get('progress', {});          // { "2:3": 1 }
@@ -230,26 +246,21 @@
 
   /* ---------- reciters (per-ayah mp3, with fallbacks) ---------- */
   const RECITERS = [
-    { name:'مشاري العفاسي', urls:[
-        ['https://everyayah.com/data/Alafasy_128kbps/', 'mp3'],
-        ['https://verses.quran.com/Alafasy/mp3/', 'mp3'] ] },
-    { name:'أبو بكر الشاطري', urls:[
-        ['https://everyayah.com/data/Abu_Bakr_Ash-Shaatree_128kbps/', 'mp3'],
-        ['https://everyayah.com/data/Alafasy_128kbps/', 'mp3'],
-        ['https://verses.quran.com/Alafasy/mp3/', 'mp3'] ] },
-    { name:'ناصر القطامي', urls:[
-        ['https://everyayah.com/data/Nasser_Alqatami_128kbps/', 'mp3'],
-        ['https://everyayah.com/data/Alafasy_128kbps/', 'mp3'],
-        ['https://verses.quran.com/Alafasy/mp3/', 'mp3'] ] },
-    { name:'ياسر الدوسري', urls:[
-        ['https://everyayah.com/data/Yasser_Ad-Dussary_128kbps/', 'mp3'],
-        ['https://everyayah.com/data/Alafasy_128kbps/', 'mp3'],
-        ['https://verses.quran.com/Alafasy/mp3/', 'mp3'] ] }
+    { name:'مشاري العفاسي', folder:'Alafasy_128kbps',
+      urls:['https://everyayah.com/data/Alafasy_128kbps/','https://verses.quran.com/Alafasy/mp3/'] },
+    { name:'أبو بكر الشاطري', folder:'Abu_Bakr_Ash-Shaatree_128kbps',
+      urls:['https://everyayah.com/data/Abu_Bakr_Ash-Shaatree_128kbps/','https://everyayah.com/data/Alafasy_128kbps/'] },
+    { name:'محمود خليل الحصري', folder:'Husary_64kbps',
+      urls:['https://everyayah.com/data/Husary_64kbps/','https://everyayah.com/data/Alafasy_128kbps/'] },
+    { name:'محمد صديق المنشاوي', folder:'Minshawy_Murattal_128kbps',
+      urls:['https://everyayah.com/data/Minshawy_Murattal_128kbps/','https://everyayah.com/data/Alafasy_128kbps/'] },
+    { name:'عبد الباسط عبد الصمد', folder:'Abdul_Basit_Murattal_64kbps',
+      urls:['https://everyayah.com/data/Abdul_Basit_Murattal_64kbps/','https://everyayah.com/data/Alafasy_128kbps/'] }
   ];
   const pad3 = n => String(n).padStart(3,'0');
   function audioCandidates(s, a){
     const f = pad3(s) + pad3(a);
-    return RECITERS[SET.reciter].urls.map(u => u[0] + f + '.' + u[1]);
+    return RECITERS[SET.reciter].urls.map(u => u + f + '.mp3');
   }
 
   /* ---------- state ---------- */
@@ -318,7 +329,7 @@
     if (showBismillah) html += '<div class="bismillah">بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ</div>';
     s.ayat.forEach((text, i) => {
       const a = i + 1;
-      const words = text.split(/\s+/).filter(Boolean).map((w, wi) =>
+      const words = splitWords(text).map((w, wi) =>
         '<span class="word" data-a="'+a+'" data-w="'+wi+'">'+normalizeWord(w)+'</span>').join(' ');
       html += '<div class="ayah" data-a="'+a+'" id="ay-'+a+'">' + words
         + ' <span class="ayah-num" data-a="'+a+'">'+ar(a)+'</span></div> ';
@@ -388,10 +399,12 @@
     if (recEl){ playRecording(cur.surah, +recEl.dataset.playrec); return; }
   });
 
-  /* ---------- audio ---------- */
+  /* ---------- audio + word-level sync ---------- */
   function setActiveAyah(a){
     cur.ayah = a;
+    lastPainted = -1;
     document.querySelectorAll('.ayah').forEach(el => el.classList.toggle('active', +el.dataset.a === a));
+    document.querySelectorAll('.word.now').forEach(w => w.classList.remove('now'));
     $('pAyah').textContent = 'الآية ' + ar(a);
     const el = document.getElementById('ay-' + a);
     if (el) el.scrollIntoView({block:'center', behavior:'smooth'});
@@ -405,6 +418,54 @@
     audio.src = url;
     return audio;
   }
+
+  let SEG = null, segPending = null;
+  function loadSegments(){
+    const folder = RECITERS[SET.reciter].folder;
+    if (SEG && SEG.folder === folder) return Promise.resolve(SEG);
+    if (segPending) return segPending;
+    segPending = fetch('seg/' + folder + '.json')
+      .then(r => { if (!r.ok) throw new Error('seg ' + r.status); return r.json(); })
+      .then(j => { SEG = { folder:folder, data:j }; segPending = null; return SEG; })
+      .catch(() => { SEG = null; segPending = null; return null; });
+    return segPending;
+  }
+
+  let rafId = null, lastPainted = -1;
+  function startSync(){
+    stopSync();
+    const step = () => {
+      paintWords();
+      if (playing) rafId = requestAnimationFrame(step);
+    };
+    rafId = requestAnimationFrame(step);
+  }
+  function stopSync(){ if (rafId) cancelAnimationFrame(rafId); rafId = null; }
+  function paintWords(){
+    if (!playing || !audio || !SEG || !SET.wordSync) return;
+    if (candIdx !== 0) return;                       // fell back to another reciter: timings no longer valid
+    const arr = (SEG.data[String(cur.surah)] || [])[cur.ayah - 1];
+    if (!arr) return;
+    const t = audio.currentTime * 1000;
+    let hit = -1, i = 0;
+    for (; i < arr.length; i += 4){
+      if (t >= arr[i+2] && t < arr[i+3]){ hit = i; break; }
+      if (t < arr[i+2]){ hit = i >= 4 ? i - 4 : -1; break; }   // gap between words: hold the previous one
+    }
+    if (i >= arr.length) hit = arr.length - 4;                  // past the last word: hold it
+    if (hit === lastPainted) return;
+    lastPainted = hit;
+    const ay = document.getElementById('ay-' + cur.ayah);
+    if (!ay) return;
+    ay.querySelectorAll('.word.now').forEach(w => w.classList.remove('now'));
+    if (hit >= 0){
+      for (let k = arr[hit]; k < arr[hit+1]; k++){
+        const w = ay.querySelector('.word[data-w="' + k + '"]');
+        if (w) w.classList.add('now');
+      }
+    }
+  }
+
   function playAyah(a){
     stopAtEnd = false;
     const total = QURAN[cur.surah-1].ayat.length;
@@ -417,6 +478,7 @@
     const cands = audioCandidates(cur.surah, cur.ayah);
     const url = cands[Math.min(candIdx, cands.length - 1)];
     const el = newAudio(url);
+    if (SET.wordSync) loadSegments();
     el.onended = () => {
       if (repeatLeft > 0){ repeatLeft--; loadAndPlay(); return; }
       const total = QURAN[cur.surah-1].ayat.length;
@@ -428,7 +490,7 @@
       else { setPlaying(false); toast('مش قادر أجيب الصوت — اتأكد من النت'); }
     };
     const p = el.play();
-    if (p && p.catch) p.catch(err => {
+    if (p && p.catch) p.catch(() => {
       if (candIdx < cands.length - 1){ candIdx++; loadAndPlay(); }
       else { setPlaying(false); toast('المتصفح منع التشغيل — اضغط ▶ تاني'); }
     });
@@ -440,6 +502,7 @@
   function setPlaying(v){
     playing = v;
     $('btnPlay').innerHTML = v ? ICON_PAUSE : ICON_PLAY;
+    if (v) startSync(); else { stopSync(); lastPainted = -1; document.querySelectorAll('.word.now').forEach(w => w.classList.remove('now')); }
   }
   $('btnPlay').onclick = () => {
     if (playing){ if (audio) audio.pause(); setPlaying(false); }
@@ -459,7 +522,6 @@
   }
   paintRepeat();
 
-  // start repeat counter whenever an ayah starts by user action
   const origPlayAyah = playAyah;
   playAyah = function(a){ repeatLeft = SET.repeat - 1; origPlayAyah(a); };
 
@@ -583,6 +645,8 @@
       + '<select data-act="reciter" style="background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:8px;font-family:inherit">'
       + RECITERS.map((r,i)=>'<option value="'+i+'" '+(i===SET.reciter?'selected':'')+'>'+r.name+'</option>').join('')
       + '</select></div>'
+      + '<div class="row"><span class="lbl">تظليل كلمة بكلمة</span>'
+      + '<button class="chip '+(SET.wordSync?'on':'')+'" data-act="wordsync">'+(SET.wordSync?'مفعّل':'مقفول')+'</button></div>'
       + '<div class="row"><span class="lbl">سرعة التلاوة</span>'
       + '<select data-act="rate" style="background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:8px;font-family:inherit">'
       + [0.75,0.9,1,1.15,1.3].map(r=>'<option value="'+r+'" '+((SET.rate||1)===r?'selected':'')+'>'+ar(String(r).replace('.','٫'))+'×</option>').join('')
@@ -599,6 +663,7 @@
     const b = e.target.closest('[data-act]'); if (!b) return;
     const act = b.dataset.act;
     if (act === 'theme'){ SET.theme = SET.theme === 'dark' ? 'light' : 'dark'; saveSet(); applyTheme(); b.classList.toggle('on'); b.textContent = SET.theme==='dark'?'مفعّل':'مقفول'; }
+    if (act === 'wordsync'){ SET.wordSync = !SET.wordSync; saveSet(); b.classList.toggle('on', SET.wordSync); b.textContent = SET.wordSync?'مفعّل':'مقفول'; if (SET.wordSync) loadSegments(); }
     if (act === 'reset'){ if (confirm('متأكد إنك عايز تمسح كل علامات الحفظ؟')){ Object.keys(PROG).forEach(k=>delete PROG[k]); saveProg(); updateProgressBar(); renderActions(); $('sheet').hidden = true; toast('اتمسح'); } }
     if (act === 'resetpeek'){ Object.keys(PEEK).forEach(k=>delete PEEK[k]); savePeek(); renderActions(); $('sheet').hidden = true; toast('اتمسح'); }
   });
