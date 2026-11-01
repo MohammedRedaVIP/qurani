@@ -91,6 +91,11 @@
   .ayah.done .word{color:var(--green)}
   .word{cursor:pointer;transition:color .12s,opacity .12s}
   .word:active{color:var(--gold)}
+  .word.err{color:var(--red)!important;background:color-mix(in srgb,var(--red) 26%,transparent);border-radius:5px}
+  .word.hit{color:var(--green)}
+  .ayah.bad{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--red) 55%,transparent);border-radius:12px}
+  .ayah.shake{animation:shake .45s}
+  @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
   .word.now{
     color:var(--gold-soft)!important;
     background:color-mix(in srgb,var(--gold) 22%,transparent);
@@ -134,7 +139,7 @@
   .pbtn.main{background:var(--gold);color:#12241d;border-color:var(--gold);width:50px;height:46px;font-size:19px}
   .rnum{position:absolute;font-size:10px;font-weight:700;transform:translate(14px,-13px);font-family:var(--font-ui)}
   .pbtn{position:relative}
-  .pbtn.rec.on{background:var(--red);color:#fff;border-color:var(--red);animation:pulse 1.4s infinite}
+  .pbtn.mic.on{background:var(--red);color:#fff;border-color:var(--red);animation:pulse 1.4s infinite}
   @keyframes pulse{50%{opacity:.6}}
   .plabel{flex:1 1 auto;text-align:center;font-size:11px;color:var(--ink-dim);line-height:1.5;min-width:0}
   .plabel b{display:block;color:var(--ink);font-size:12.5px;font-weight:600}
@@ -152,7 +157,6 @@
   .row:last-child{border-bottom:none}
   .row .lbl{color:var(--ink-dim);font-size:13px}
   input[type=range]{width:140px;accent-color:var(--gold)}
-  .recitem{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
   .toast{
     position:fixed;bottom:calc(78px + var(--safe-b));left:50%;transform:translateX(-50%);
     background:var(--card2);border:1px solid var(--line);color:var(--ink);
@@ -198,7 +202,7 @@
     <button class="pbtn main" id="btnPlay" aria-label="تشغيل"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M8 5.2v13.6L19 12z"/></svg></button>
     <button class="pbtn" id="btnNext" aria-label="الآية التالية"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M15.8 6H18v12h-2.2zM5 6.6v10.8L14.6 12z"/></svg></button>
     <button class="pbtn" id="btnRepeat" aria-label="تكرار"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M17 3.5l3.4 3.4L17 10.3V8H8.2A3.2 3.2 0 0 0 5 11.2v1.3H3v-1.3A5.2 5.2 0 0 1 8.2 6H17zM7 20.5l-3.4-3.4L7 13.7V16h8.8A3.2 3.2 0 0 0 19 12.8v-1.3h2v1.3a5.2 5.2 0 0 1-5.2 5.2H7z"/></svg><span class="rnum" id="repeatNum"></span></button>
-    <button class="pbtn rec" id="btnRec" aria-label="تسجيل"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg></button>
+    <button class="pbtn mic" id="btnListen" aria-label="تسميع"><svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor"><path d="M12 14.5a3.2 3.2 0 0 0 3.2-3.2V5.6a3.2 3.2 0 1 0-6.4 0v5.7a3.2 3.2 0 0 0 3.2 3.2zm5.6-3.4a5.6 5.6 0 0 1-11.2 0H4.6a7.4 7.4 0 0 0 6.5 7.3v2.4h1.8v-2.4a7.4 7.4 0 0 0 6.5-7.3z"/></svg></button>
     <div class="plabel"><b id="pAyah">الآية ١</b><span id="pHint">اضغط على آية للاستماع</span></div>
   </div>
 </section>
@@ -236,7 +240,7 @@
     set(k, v){ try{ localStorage.setItem('q.'+k, JSON.stringify(v)); }catch(e){} }
   };
   const SET = Object.assign({
-    theme:'dark', fontSize:30, repeat:1, reciter:0, wordSync:true
+    theme:'dark', fontSize:30, repeat:1, reciter:0, wordSync:true, alert:true
   }, LS.get('settings', {}));
   const saveSet = () => LS.set('settings', SET);
   const PROG = LS.get('progress', {});          // { "2:3": 1 }
@@ -347,7 +351,6 @@
     html += '<button class="tiny '+(PROG[key]?'on':'')+'" data-done="'+a+'">'
          + (PROG[key] ? '✓ محفوظة' : 'علّمها محفوظة') + '</button>';
     if (PEEK[key]) html += '<span class="tiny warn">استراق '+ar(PEEK[key])+'</span>';
-    if (recCount[key]) html += '<button class="tiny" data-playrec="'+a+'">▶ تسجيلي ('+ar(recCount[key])+')</button>';
     $('ayActions').innerHTML = html;
   }
   function updateProgressBar(){
@@ -390,19 +393,18 @@
 
   $('ayActions').addEventListener('click', e => {
     const doneEl = e.target.closest('[data-done]');
-    const recEl = e.target.closest('[data-playrec]');
     if (doneEl){
       const a = +doneEl.dataset.done, key = cur.surah + ':' + a;
       if (PROG[key]) delete PROG[key]; else PROG[key] = 1;
       saveProg(); renderActions(); updateProgressBar(); return;
     }
-    if (recEl){ playRecording(cur.surah, +recEl.dataset.playrec); return; }
   });
 
   /* ---------- audio + word-level sync ---------- */
   function setActiveAyah(a){
     cur.ayah = a;
     lastPainted = -1;
+    if (listening){ spokenFinal = []; spokenInterim = []; alerted = new Set(); clearMarks(); }
     document.querySelectorAll('.ayah').forEach(el => el.classList.toggle('active', +el.dataset.a === a));
     document.querySelectorAll('.word.now').forEach(w => w.classList.remove('now'));
     $('pAyah').textContent = 'الآية ' + ar(a);
@@ -420,8 +422,8 @@
   }
 
   let SEG = null, segPending = null;
-  function loadSegments(){
-    const folder = RECITERS[SET.reciter].folder;
+  function loadSegments(folder){
+    folder = folder || RECITERS[SET.reciter].folder;
     if (SEG && SEG.folder === folder) return Promise.resolve(SEG);
     if (segPending) return segPending;
     segPending = fetch('seg/' + folder + '.json')
@@ -443,7 +445,6 @@
   function stopSync(){ if (rafId) cancelAnimationFrame(rafId); rafId = null; }
   function paintWords(){
     if (!playing || !audio || !SEG || !SET.wordSync) return;
-    if (candIdx !== 0) return;                       // fell back to another reciter: timings no longer valid
     const arr = (SEG.data[String(cur.surah)] || [])[cur.ayah - 1];
     if (!arr) return;
     const t = audio.currentTime * 1000;
@@ -478,7 +479,8 @@
     const cands = audioCandidates(cur.surah, cur.ayah);
     const url = cands[Math.min(candIdx, cands.length - 1)];
     const el = newAudio(url);
-    if (SET.wordSync) loadSegments();
+    const folder = candIdx === 0 ? RECITERS[SET.reciter].folder : 'Alafasy_128kbps';
+    if (SET.wordSync) loadSegments(folder);
     el.onended = () => {
       if (repeatLeft > 0){ repeatLeft--; loadAndPlay(); return; }
       const total = QURAN[cur.surah-1].ayat.length;
@@ -536,99 +538,188 @@
   }
   function openSurah(n){
     cur.surah = n; cur.ayah = 1;
+    if (SET.wordSync) loadSegments(RECITERS[SET.reciter].folder);
     mode = 'read';
     renderSurah();
     show(scRead, scHome);
     $('mushaf').scrollTop = 0;
   }
 
-  /* ---------- recordings (IndexedDB) ---------- */
-  let recCount = {};
-  let db = null;
-  function openDB(){
-    return new Promise((res, rej) => {
-      const r = indexedDB.open('quran-app', 1);
-      r.onupgradeneeded = () => { r.result.createObjectStore('recs'); };
-      r.onsuccess = () => { db = r.result; res(db); };
-      r.onerror = () => rej(r.error);
-    });
+  /* ---------- تسميع: مقارنة صوتك بنص المصحف ---------- */
+  const AR_MARKS = /[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u08F0-\u08F2\u0640]/g;
+  function normWord(w){
+    return (w || '').replace(AR_MARKS, '')
+      .replace(/[\u0623\u0625\u0622\u0671]/g, '\u0627')
+      .replace(/\u0649/g, '\u064A').replace(/\u0629/g, '\u0647')
+      .replace(/\u0624/g, '\u0648').replace(/\u0626/g, '\u064A').replace(/\u0621/g, '')
+      .replace(/[^\u0621-\u064A]/g, '');
   }
-  function dbPut(key, val){
-    return new Promise((res, rej) => {
-      const tx = db.transaction('recs', 'readwrite');
-      tx.objectStore('recs').put(val, key);
-      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
-    });
-  }
-  function dbGet(key){
-    return new Promise((res, rej) => {
-      const tx = db.transaction('recs', 'readonly');
-      const rq = tx.objectStore('recs').get(key);
-      rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error);
-    });
-  }
-  function dbAllKeys(){
-    return new Promise((res, rej) => {
-      const tx = db.transaction('recs', 'readonly');
-      const rq = tx.objectStore('recs').getAllKeys();
-      rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error);
-    });
-  }
-  async function refreshRecCounts(){
-    try{
-      if (!db) await openDB();
-      const keys = await dbAllKeys();
-      recCount = {};
-      keys.forEach(k => { const [s,a] = String(k).split(':'); const kk = s+':'+a; recCount[kk] = (recCount[kk]||0)+1; });
-      renderActions();
-    }catch(e){ /* ignore */ }
-  }
-  let mediaRec = null, chunks = [], recStart = 0, recTimer = null;
-  $('btnRec').onclick = async () => {
-    if (mediaRec && mediaRec.state === 'recording'){
-      mediaRec.stop(); return;
+  function lev(a, b){
+    const m = a.length, n = b.length;
+    if (!m) return n; if (!n) return m;
+    let prev = new Array(n + 1), cur = new Array(n + 1);
+    for (let j = 0; j <= n; j++) prev[j] = j;
+    for (let i = 1; i <= m; i++){
+      cur[0] = i;
+      for (let j = 1; j <= n; j++){
+        const c = a[i-1] === b[j-1] ? 0 : 1;
+        cur[j] = Math.min(prev[j] + 1, cur[j-1] + 1, prev[j-1] + c);
+      }
+      const t = prev; prev = cur; cur = t;
     }
-    if (!navigator.mediaDevices || !window.MediaRecorder){
-      toast('التسجيل مش مدعوم في المتصفح ده'); return;
+    return prev[n];
+  }
+  function closeEnough(a, b){
+    if (!a || !b) return false;
+    if (a === b) return true;
+    if (a.length <= 2 || b.length <= 2) return false;              // كلمات من حرفين: تطابق تام
+    if (a.indexOf(b) === 0 || b.indexOf(a) === 0){                 // زيادة حرف في الآخر (إعراب/مدّ)
+      return Math.abs(a.length - b.length) <= 2;
     }
-    try{
-      const stream = await navigator.mediaDevices.getUserMedia({audio:true});
-      mediaRec = new MediaRecorder(stream);
-      chunks = []; recStart = Date.now();
-      mediaRec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
-      mediaRec.onstop = async () => {
-        clearInterval(recTimer);
-        $('btnRec').classList.remove('on');
-        stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(chunks, {type: chunks[0] ? chunks[0].type : 'audio/webm'});
-        const key = cur.surah + ':' + cur.ayah + ':' + Date.now();
-        try{
-          if (!db) await openDB();
-          await dbPut(key, blob);
-          await refreshRecCounts();
-          toast('اتسجلت — تقدر تسمعها من تحت الآية');
-        }catch(err){ toast('مش قادر أحفظ التسجيل'); }
-      };
-      mediaRec.start();
-      $('btnRec').classList.add('on');
-      recTimer = setInterval(() => {
-        const sec = Math.floor((Date.now() - recStart)/1000);
-        $('pHint').textContent = 'بسجّل… ' + ar(sec) + 'ث (اضغط ● للوقف)';
-      }, 500);
-    }catch(e){ toast('لازم تسمح بالمايك من إعدادات المتصفح'); }
-  };
-  async function playRecording(s, a){
-    try{
-      if (!db) await openDB();
-      const keys = (await dbAllKeys()).filter(k => String(k).startsWith(s+':'+a+':')).sort();
-      if (!keys.length){ toast('مفيش تسجيل للآية دي'); return; }
-      const blob = await dbGet(keys[keys.length-1]);
-      if (audio) audio.pause();
-      audio = new Audio(URL.createObjectURL(blob));
-      audio.play(); setPlaying(true);
-      audio.onended = () => setPlaying(false);
-      toast('بسمع تسجيلك للآية ' + ar(a));
-    }catch(e){ toast('مش قادر أفتح التسجيل'); }
+    const d = lev(a, b);
+    return d <= (Math.max(a.length, b.length) >= 6 ? 2 : 1);
+  }
+  function alignWords(spoken, expected){
+    const m = spoken.length, n = expected.length;
+    if (!n) return { status: [], extra: [] };
+    const dp = [];
+    for (let i = 0; i <= m; i++){ dp.push(new Int32Array(n + 1)); dp[i][0] = i; }
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    for (let i = 1; i <= m; i++){
+      for (let j = 1; j <= n; j++){
+        const c = closeEnough(spoken[i-1], expected[j-1]) ? 0 : 1;
+        let v = dp[i-1][j-1] + c;
+        if (dp[i-1][j] + 1 < v) v = dp[i-1][j] + 1;
+        if (dp[i][j-1] + 1 < v) v = dp[i][j-1] + 1;
+        dp[i][j] = v;
+      }
+    }
+    const status = new Array(n).fill('pending');
+    const extra = [];
+    let i = m, j = n, lastAligned = -1;
+    while (i > 0 && j > 0){
+      const c = closeEnough(spoken[i-1], expected[j-1]) ? 0 : 1;
+      if (dp[i][j] === dp[i-1][j-1] + c){
+        status[j-1] = c === 0 ? 'ok' : 'wrong';
+        if (lastAligned < 0) lastAligned = j - 1;
+        i--; j--;
+      } else if (dp[i][j] === dp[i-1][j] + 1){ extra.push(spoken[i-1]); i--; }
+      else { j--; }
+    }
+    while (i > 0){ extra.push(spoken[i-1]); i--; }
+    for (let k = 0; k < n; k++) if (status[k] === 'pending' && k <= lastAligned) status[k] = 'skipped';
+    return { status: status, extra: extra };
+  }
+
+  let SR = null, listening = false, spokenFinal = [], spokenInterim = [];
+  let alerted = new Set(), alertCtx = null, advanceTimer = null;
+  function srSupported(){ return !!(window.SpeechRecognition || window.webkitSpeechRecognition); }
+  function clearMarks(){
+    document.querySelectorAll('.word.err,.word.hit').forEach(w => w.classList.remove('err','hit'));
+    document.querySelectorAll('.ayah.bad').forEach(a => a.classList.remove('bad'));
+  }
+  function alertError(){
+    if (!SET.alert) return;
+    if (navigator.vibrate) { try { navigator.vibrate([90, 60, 90]); } catch(e){} }
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!alertCtx) alertCtx = new Ctx();
+      if (alertCtx.state === 'suspended') alertCtx.resume();
+      const o = alertCtx.createOscillator(), g = alertCtx.createGain();
+      o.type = 'sine'; o.frequency.value = 880;
+      g.gain.setValueAtTime(0.0001, alertCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.14, alertCtx.currentTime + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, alertCtx.currentTime + 0.16);
+      o.connect(g); g.connect(alertCtx.destination);
+      o.start(); o.stop(alertCtx.currentTime + 0.18);
+    } catch(e){}
+    const ay = document.getElementById('ay-' + cur.ayah);
+    if (ay){ ay.classList.remove('shake'); void ay.offsetWidth; ay.classList.add('shake'); }
+  }
+  function startListen(){
+    if (!srSupported()){ toast('المتصفح ده مش بيدعم التعرّف على الكلام — استخدم كروم'); return; }
+    if (playing){ if (audio) audio.pause(); setPlaying(false); }
+    const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    SR = new Ctor();
+    SR.lang = 'ar-SA'; SR.continuous = true; SR.interimResults = true; SR.maxAlternatives = 1;
+    SR.onresult = onSpeech;
+    SR.onerror = function(e){
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed'){ toast('لازم تسمح بالمايك من إعدادات المتصفح'); stopListen(); }
+      else if (e.error === 'network'){ toast('التعرّف على الكلام محتاج نت'); }
+    };
+    SR.onend = function(){ if (listening){ try { SR.start(); } catch(e){} } };
+    spokenFinal = []; spokenInterim = []; alerted = new Set();
+    clearTimeout(advanceTimer);
+    listening = true;
+    $('btnListen').classList.add('on');
+    clearMarks();
+    $('pHint').textContent = 'بتسمعك… اتلُ الآية';
+    try { SR.start(); } catch(e){}
+  }
+  function stopListen(){
+    listening = false;
+    clearTimeout(advanceTimer);
+    if (SR){ try { SR.onend = null; SR.onresult = null; SR.stop(); } catch(e){} SR = null; }
+    $('btnListen').classList.remove('on');
+    $('pHint').textContent = 'وقف التسميع';
+  }
+  $('btnListen').onclick = function(){ listening ? stopListen() : startListen(); };
+
+  function onSpeech(ev){
+    spokenInterim = [];
+    for (let i = ev.resultIndex; i < ev.results.length; i++){
+      const r = ev.results[i], txt = r[0].transcript;
+      const parts = txt.split(/\s+/).filter(Boolean);
+      if (r.isFinal) spokenFinal = spokenFinal.concat(parts);
+      else spokenInterim = spokenInterim.concat(parts);
+    }
+    evaluateSpeech();
+  }
+  function expectedWords(a){
+    return splitWords(QURAN[cur.surah-1].ayat[a-1]).map(normWord).filter(Boolean);
+  }
+  function evaluateSpeech(){
+    if (!listening) return;
+    const total = QURAN[cur.surah-1].ayat.length;
+    const exp = expectedWords(cur.ayah);
+    const look = cur.ayah < total ? expectedWords(cur.ayah + 1).slice(0, 6) : [];
+    const live = spokenFinal.concat(spokenInterim).map(normWord).filter(Boolean);
+    const r = alignWords(live, exp.concat(look));
+    paintStatus(r.status.slice(0, exp.length), r.extra.length > 0);
+
+    const fin = spokenFinal.map(normWord).filter(Boolean);
+    if (fin.length){
+      const full = alignWords(fin, exp.concat(look));
+      const rf = { status: full.status.slice(0, exp.length), extra: full.extra };
+      rf.status.forEach(function(st, idx){
+        if ((st === 'wrong' || st === 'skipped') && !alerted.has(idx)){ alerted.add(idx); alertError(); }
+      });
+      if (rf.extra.length && !alerted.has('x')){ alerted.add('x'); alertError(); }
+      const done = rf.status.length > 0 && rf.status.every(function(st){ return st === 'ok'; });
+      const total = QURAN[cur.surah-1].ayat.length;
+      if (done && rf.extra.length === 0 && cur.ayah < total && !advanceTimer){
+        advanceTimer = setTimeout(function(){
+          advanceTimer = null;
+          if (!listening) return;
+          cur.ayah++;
+          setActiveAyah(cur.ayah);
+          spokenFinal = []; spokenInterim = []; alerted = new Set();
+          clearMarks();
+          $('pHint').textContent = 'الآية ' + ar(cur.ayah) + ' — كمّل';
+        }, 800);
+      }
+    }
+  }
+  function paintStatus(status, hasExtra){
+    const ay = document.getElementById('ay-' + cur.ayah);
+    if (!ay) return;
+    ay.querySelectorAll('.word').forEach(function(w){
+      const st = status[+w.dataset.w];
+      w.classList.toggle('err', st === 'wrong' || st === 'skipped');
+      w.classList.toggle('hit', st === 'ok');
+    });
+    const bad = hasExtra || status.some(function(st){ return st === 'wrong' || st === 'skipped'; });
+    ay.classList.toggle('bad', bad);
   }
 
   /* ---------- settings sheet ---------- */
@@ -651,6 +742,10 @@
       + '<select data-act="rate" style="background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:8px;font-family:inherit">'
       + [0.75,0.9,1,1.15,1.3].map(r=>'<option value="'+r+'" '+((SET.rate||1)===r?'selected':'')+'>'+ar(String(r).replace('.','٫'))+'×</option>').join('')
       + '</select></div>'
+      + '<div class="row"><span class="lbl">اهتزاز وصوت التنبيه عند الخطأ</span>'
+      + '<button class="chip '+(SET.alert?'on':'')+'" data-act="alert">'+(SET.alert?'مفعّل':'مقفول')+'</button></div>'
+      + '<div class="row"><span class="lbl">توقيتات التظليل</span><span style="font-size:12px;color:var(--ink-dim)">'
+      + (SEG ? 'جاهزة (' + SEG.folder + ')' : (segPending ? 'بتحمّل…' : 'لسه ما اتحمّلتش')) + '</span></div>'
       + '<div class="row"><span class="lbl">تقدّمك</span><span>'+ar(Object.keys(PROG).length)+' آية معلّمة</span></div>'
       + '<div class="row"><span class="lbl">تصفير كل التقدم</span><button class="chip" data-act="reset">مسح</button></div>'
       + '<div class="row"><span class="lbl">تصفير الاستراق</span><button class="chip" data-act="resetpeek">مسح</button></div>'
@@ -663,6 +758,7 @@
     const b = e.target.closest('[data-act]'); if (!b) return;
     const act = b.dataset.act;
     if (act === 'theme'){ SET.theme = SET.theme === 'dark' ? 'light' : 'dark'; saveSet(); applyTheme(); b.classList.toggle('on'); b.textContent = SET.theme==='dark'?'مفعّل':'مقفول'; }
+    if (act === 'alert'){ SET.alert = !SET.alert; saveSet(); b.classList.toggle('on', SET.alert); b.textContent = SET.alert?'مفعّل':'مقفول'; }
     if (act === 'wordsync'){ SET.wordSync = !SET.wordSync; saveSet(); b.classList.toggle('on', SET.wordSync); b.textContent = SET.wordSync?'مفعّل':'مقفول'; if (SET.wordSync) loadSegments(); }
     if (act === 'reset'){ if (confirm('متأكد إنك عايز تمسح كل علامات الحفظ؟')){ Object.keys(PROG).forEach(k=>delete PROG[k]); saveProg(); updateProgressBar(); renderActions(); $('sheet').hidden = true; toast('اتمسح'); } }
     if (act === 'resetpeek'){ Object.keys(PEEK).forEach(k=>delete PEEK[k]); savePeek(); renderActions(); $('sheet').hidden = true; toast('اتمسح'); }
@@ -670,13 +766,12 @@
   $('sheetInner').addEventListener('input', e => {
     const el = e.target;
     if (el.dataset.act === 'font'){ SET.fontSize = +el.value; saveSet(); applyTheme(); }
-    if (el.dataset.act === 'reciter'){ SET.reciter = +el.value; saveSet(); toast('القارئ: ' + RECITERS[SET.reciter].name); }
+    if (el.dataset.act === 'reciter'){ SET.reciter = +el.value; saveSet(); SEG = null; loadSegments(); toast('القارئ: ' + RECITERS[SET.reciter].name); }
     if (el.dataset.act === 'rate'){ SET.rate = +el.value; saveSet(); if (audio) audio.playbackRate = SET.rate; }
   });
 
   /* ---------- boot ---------- */
   renderHome('');
-  refreshRecCounts();
   document.addEventListener('keydown', e => {
     if (scRead.hidden) return;
     if (e.key === 'ArrowLeft') playAyah(cur.ayah + 1);
